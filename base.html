@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>WebGL Raw: Triangoli e Cerchio con Triangolo</title>
+    <style>
+        body { margin: 0; background: #333; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: sans-serif; }
+        canvas { width: 800px; height: 400px; border: 2px solid #000; background-color: black;}
+        #labels { position: absolute; top: 10px; color: white; display: flex; width: 800px; justify-content: space-between; pointer-events: none;}
+        .label { width: 400px; text-align: center; text-shadow: 1px 1px 2px black; }
+    </style>
+</head>
+<body>
+
+    <div id="labels">
+        <div class="label">Area 1: 3 Triangoli (Azzurro)</div>
+        <div class="label">Area 2: Cerchio e Triangolo (Bianco)</div>
+    </div>
+    <canvas id="glCanvas" width="800" height="400"></canvas>
+
+<script>
+/** SHADER SOURCE (Simple 2D Color Shader) **/
+const vsSource = `
+    attribute vec4 aPosition;
+    uniform vec2 uTranslation; // Traslazione semplice invece di matrici complesse
+    uniform float uScale;       // Scala semplice
+
+    void main() {
+        // Applichiamo scala e traslazione manualmente
+        vec2 scaledPos = aPosition.xy * uScale;
+        gl_Position = vec4(scaledPos + uTranslation, 0.0, 1.0);
+    }
+`;
+
+const fsSource = `
+    precision mediump float;
+    uniform vec4 uColor;
+
+    void main() {
+        gl_FragColor = uColor;
+    }
+`;
+
+function main() {
+    const canvas = document.querySelector("#glCanvas");
+    const gl = canvas.getContext("webgl");
+
+    if (!gl) return alert("WebGL non supportato");
+
+    // 1. Inizializza shader program unico per tutto
+    const program = initShaderProgram(gl, vsSource, fsSource);
+    gl.useProgram(program);
+
+    // 2. Ottieni location delle variabili
+    const positionLocation = gl.getAttribLocation(program, 'aPosition');
+    const translationLocation = gl.getUniformLocation(program, 'uTranslation');
+    const scaleLocation = gl.getUniformLocation(program, 'uScale');
+    const colorLocation = gl.getUniformLocation(program, 'uColor');
+
+    // 3. Crea i Buffer per le Geometrie
+    const buffers = initBuffers(gl);
+
+    function render() {
+        // Pulizia generale del canvas (colore di base nero, prima dello scissor)
+        gl.clearColor(0, 0, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        // Abilitiamo lo Scissor Test per dividere lo schermo
+        gl.enable(gl.SCISSOR_TEST);
+
+        const width = gl.canvas.width;
+        const height = gl.canvas.height;
+
+        // ==========================================================
+        // --- PARTE SINISTRA: TRE TRIANGOLI ---
+        // ==========================================================
+        gl.viewport(0, 0, width / 2, height);
+        gl.scissor(0, 0, width / 2, height);
+        gl.clearColor(0.5, 0.8, 1.0, 1.0); // Azzurro
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        // Disegniamo i triangoli usando lo stesso buffer ma posizioni/colori diversi
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffers.triangle);
+        gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(positionLocation);
+
+        // Impostiamo scala globale per questa zona
+        gl.uniform1f(scaleLocation, 1.0);
+
+        // 1. Triangolo Rosso (in alto a sx)
+        gl.uniform2f(translationLocation, -0.5, 0.5);
+        gl.uniform4f(colorLocation, 1, 0, 0, 1);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+        // 2. Triangolo Verde (in basso a dx)
+        gl.uniform2f(translationLocation, 0.3, -0.4);
+        gl.uniform4f(colorLocation, 0, 1, 0, 1);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+        // 3. Triangolo Blu (centrale sinistro)
+        gl.uniform2f(translationLocation, -0.7, -0.1);
+        gl.uniform4f(colorLocation, 0, 0, 1, 1);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+
+        // ==========================================================
+        // --- PARTE DESTRA: CERCHIO + TRIANGOLO ---
+        // ==========================================================
+        gl.viewport(width / 2, 0, width / 2, height);
+        gl.scissor(width / 2, 0, width / 2, height);
+        gl.clearColor(1, 1, 1, 1); // Bianco
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        // Posizione centrale per entrambi gli oggetti in questa zona
+        const centerX = 0.0;
+        const centerY = 0.0;
+
+        // --- Disegna il Cerchio (Nero o Grigio scuro per contrasto) ---
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffers.circle);
+        gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(positionLocation);
+
+        gl.uniform1f(scaleLocation, 0.6); // Cerchio abbastanza grande
+        gl.uniform2f(translationLocation, centerX, centerY);
+        gl.uniform4f(colorLocation, 0.2, 0.2, 0.2, 1); // Grigio scuro
+        // Usiamo TRIANGLE_FAN per il cerchio
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, buffers.circleVertexCount);
+
+        // --- Disegna il Triangolo Dentro (Giallo per risaltare) ---
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffers.triangle); // Riutilizziamo il buffer triangolo
+        gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+        
+        gl.uniform1f(scaleLocation, 0.3); // Più piccolo del cerchio
+        gl.uniform2f(translationLocation, centerX, centerY);
+        gl.uniform4f(colorLocation, 1, 1, 0, 1); // Giallo
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    }
+
+    render();
+}
+
+// --- Funzioni di supporto WebGL Raw ---
+
+function initBuffers(gl) {
+    // 1. Buffer Triangolo Standard (centrato nell'origine, punta in alto)
+    const trianglePos = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, trianglePos);
+    // Coordinate normalizzate per un triangolo equilatero semplice
+    const triVertices = new Float32Array([
+         0.0,  0.25,  // Alto
+        -0.2, -0.15,  // Basso Sx
+         0.2, -0.15   // Basso Dx
+    ]);
+    gl.bufferData(gl.ARRAY_BUFFER, triVertices, gl.STATIC_DRAW);
+
+    // 2. Buffer Cerchio (approssimato con TRIANGLE_FAN)
+    const circlePos = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, circlePos);
+    
+    const segments = 64; // Più segmenti = cerchio più liscio
+    const radius = 1.0;
+    let circleVertices = [0, 0]; // Centro del fan
+
+    for (let i = 0; i <= segments; i++) {
+        const angle = (i / segments) * Math.PI * 2;
+        circleVertices.push(Math.cos(angle) * radius);
+        circleVertices.push(Math.sin(angle) * radius);
+    }
+    
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(circleVertices), gl.STATIC_DRAW);
+
+    return { 
+        triangle: trianglePos, 
+        circle: circlePos,
+        circleVertexCount: circleVertices.length / 2 // Numero di vertici (coppie x,y)
+    };
+}
+
+function initShaderProgram(gl, vs, fs) {
+    const vShader = loadShader(gl, gl.VERTEX_SHADER, vs);
+    const fShader = loadShader(gl, gl.FRAGMENT_SHADER, fs);
+    const prog = gl.createProgram();
+    gl.attachShader(prog, vShader);
+    gl.attachShader(prog, fShader);
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        alert('Errore link shader: ' + gl.getProgramInfoLog(prog));
+    }
+    return prog;
+}
+
+function loadShader(gl, type, source) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, source);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+        alert('Errore compilazione shader: ' + gl.getShaderInfoLog(s));
+        gl.deleteShader(s);
+        return null;
+    }
+    return s;
+}
+
+main();
+</script>
+</body>
+</html>

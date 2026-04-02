@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGL Modular Engine</title>
+    <style>
+        /* Centriamo il canvas e diamo un colore di sfondo alla pagina */
+        body { 
+            margin: 0; 
+            background: #1a1a1a; 
+            display: flex; 
+            flex-direction: column;
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            color: white;
+            font-family: sans-serif;
+        }
+
+        canvas { 
+            border: 4px solid #000; 
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            background: black;
+        }
+
+        .info {
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="info">WebGL Hardware Driver: Active</div>
+    
+    <canvas id="mainCanvas" width="800" height="400"></canvas>
+
+    <script type="module">
+        // Importiamo solo la classe Engine, lei si occuperà di importare tutto il resto
+        import { Engine } from './Engine.js';
+
+        try {
+            // 1. Creiamo il "Regista" passandogli l'ID del canvas
+            const myEngine = new Engine('mainCanvas');
+
+            // 2. Facciamo partire il ciclo di calcolo e disegno
+            myEngine.run();
+
+            console.log("GPU Engine started successfully.");
+        } catch (error) {
+            // Gestione errori nel caso il browser o il codice abbiano problemi
+            console.error("Engine failure:", error);
+            alert("Errore nell'inizializzazione del motore grafico: " + error.message);
+        }
+    </script>
+</body>
+</html>

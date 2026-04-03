@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGL Monolitico: Due Triangoli</title>
+    <style>
+        body { margin: 0; background: #222; display: flex; justify-content: center; align-items: center; height: 100vh; color: white; font-family: sans-serif; }
+        canvas { border: 2px solid #000; display: block; }
+    </style>
+</head>
+<body>
+
+    <canvas id="glCanvas" width="800" height="400"></canvas>
+
+    <script>
+        // === 1. SORGENTI SHADER (GLSL) ===
+        // Definiti direttamente come stringhe JavaScript
+
+        const vsSource = `
+            attribute vec2 aPosition;
+            void main() {
+                // Non usiamo uniform per trasformazioni, 
+                // usiamo coordinate NDC direttamente nel buffer
+                gl_Position = vec4(aPosition, 0.0, 1.0);
+            }
+        `;
+
+        const fsSource = `
+            precision mediump float;
+            uniform vec4 uColor; // Uniform per cambiare colore tra i due triangoli
+            void main() {
+                gl_FragColor = uColor;
+            }
+        `;
+
+        // === 2. FUNZIONI DI UTILITÀ (HELPER) ===
+        // Funzioni procedurali per setup di basso livello
+
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('Errore compilazione shader:', gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+
+        function createProgram(gl, vsSource, fsSource) {
+            const vertexShader = createShader(gl, gl.VERTEX_SHADER, vsSource);
+            const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Errore linking program:', gl.getProgramInfoLog(program));
+                return null;
+            }
+            return program;
+        }
+
+        // === 3. MAIN SCRIPT ===
+
+        function main() {
+            const canvas = document.getElementById('glCanvas');
+            const gl = canvas.getContext('webgl');
+
+            if (!gl) {
+                alert('WebGL non supportato');
+                return;
+            }
+
+            // A. Inizializzazione Shaders e Program
+            const program = createProgram(gl, vsSource, fsSource);
+            gl.useProgram(program);
+
+            // B. Reperimento Locations (Indirizzi variabili GPU)
+            const positionLocation = gl.getAttribLocation(program, 'aPosition');
+            const colorLocation = gl.getUniformLocation(program, 'uColor');
+
+            // C. Definizione Geometria (Dati dei Vertici)
+            // Usiamo coordinate NDC (-1.0 a +1.0) direttamente.
+            // Poiché non usiamo trasformazioni nello shader, dobbiamo definire
+            // i vertici già posizionati nella metà sinistra e destra.
+
+            // Triangolo Sinistro (per area Gialla) - centrato a x=-0.5
+            const verticesLeft = new Float32Array([
+                -0.5,  0.5,  // Top
+                -0.8, -0.3,  // Bottom Left
+                -0.2, -0.3   // Bottom Right
+            ]);
+
+            // Triangolo Destro (per area Blu) - centrato a x=0.5
+            const verticesRight = new Float32Array([
+                 0.5,  0.6,  // Top
+                 0.2, -0.4,  // Bottom Left
+                 0.8, -0.4   // Bottom Right
+            ]);
+
+            // D. Creazione e Caricamento Buffer GPU
+            // Creiamo due buffer separati, uno per geometria
+            
+            const bufferLeft = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, bufferLeft);
+            gl.bufferData(gl.ARRAY_BUFFER, verticesLeft, gl.STATIC_DRAW);
+
+            const bufferRight = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, bufferRight);
+            gl.bufferData(gl.ARRAY_BUFFER, verticesRight, gl.STATIC_DRAW);
+
+            // E. Configurazione Stato Globale WebGL
+            const width = canvas.width;
+            const height = canvas.height;
+            const halfWidth = width / 2;
+
+            // Abilitiamo lo Scissor Test per il ritaglio dello sfondo
+            gl.enable(gl.SCISSOR_TEST);
+
+
+            // ============================================================
+            // F. RENDER AREA SINISTRA (SFONDO GIALLO, TRIANGOLO VIOLA)
+            // ============================================================
+            
+            // 1. Isoriamo l'area (Viewport + Scissor)
+            gl.viewport(0, 0, halfWidth, height); // Metà sinistra
+            gl.scissor(0, 0, halfWidth, height);
+            
+            // 2. Puliamo lo sfondo con Giallo
+            gl.clearColor(1.0, 1.0, 0.0, 1.0); // Giallo
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            // 3. Prepariamo il disegno del triangolo
+            gl.bindBuffer(gl.ARRAY_BUFFER, bufferLeft);
+            gl.enableVertexAttribArray(positionLocation);
+            gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+            // 4. Impostiamo il colore del triangolo (Viola)
+            gl.uniform4f(colorLocation, 0.5, 0.0, 0.5, 1.0); // Viola
+
+            // 5. Disegniamo
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+
+            // ============================================================
+            // G. RENDER AREA DESTRA (SFON
